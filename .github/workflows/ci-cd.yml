@@ -1,0 +1,105 @@
+name: ASP.NET CI/CD
+
+on:
+  push:
+    branches: [ main, develop ,master]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH:   'src/TodoApi/TodoApi.csproj'
+  TEST_PATH:      'tests/TodoApi.Tests/TodoApi.Tests.csproj'
+  PUBLISH_DIR:    'publish'
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & Test
+    runs-on: windows-latest          # windows-latest for full .NET Framework compat
+    # runs-on: ubuntu-latest         # ← swap to linux for faster/cheaper runners
+
+    steps:
+      # 1. Checkout source
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Install .NET 8 SDK
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # 3. Cache NuGet packages (speeds up subsequent runs)
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # 4. Restore dependencies
+      - name: Restore Packages
+        run: dotnet restore TodoApi.sln
+
+      # 5. Build in Release mode (treat warnings as errors)
+      - name: Build Project
+        run: dotnet build TodoApi.sln --configuration Release --no-restore
+
+      # 6. Run tests with coverage collection
+      - name: Run Tests
+        run: |
+          dotnet test ${{ env.TEST_PATH }} `
+            --configuration Release `
+            --no-build `
+            --verbosity normal `
+            --logger "trx;LogFileName=test-results.trx" `
+            --collect:"XPlat Code Coverage" `
+            --results-directory ./TestResults
+
+      # 7. Upload test results (visible in GitHub Actions summary)
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()               # upload even on test failure
+        with:
+          name: test-results
+          path: TestResults/
+
+      # 8. Publish the web app (self-contained for portability)
+      - name: Publish Application
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} `
+            --configuration Release `
+            --no-build `
+            --output ${{ env.PUBLISH_DIR }}
+
+      # 9. Upload published artifact — this is the deployable ZIP
+      - name: Upload Published Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: todo-api-release
+          path: ${{ env.PUBLISH_DIR }}/**
+          retention-days: 30
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Optional: add a deploy job here that downloads the artifact and pushes to
+  # Azure App Service, AWS Elastic Beanstalk, or any other host.
+  #
+  # deploy:
+  #   name: Deploy to Staging
+  #   needs: build-and-test
+  #   runs-on: ubuntu-latest
+  #   environment: staging
+  #   steps:
+  #     - name: Download artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: todo-api-release
+  #     - name: Deploy to Azure Web App
+  #       uses: azure/webapps-deploy@v3
+  #       with:
+  #         app-name: 'my-todo-api'
+  #         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+  #         package: .
