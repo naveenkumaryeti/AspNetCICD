@@ -2,7 +2,7 @@ name: ASP.NET CI/CD
 
 on:
   push:
-    branches: [ main, develop ,master]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:          # allow manual trigger from GitHub UI
