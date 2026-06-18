@@ -177,9 +177,9 @@ public class TodosControllerTests : IClassFixture<WebApplicationFactory<Program>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var stats = await response.Content.ReadFromJsonAsync<Dictionary<string, int>>();
-        stats.Should().ContainKey("Total");
-        stats.Should().ContainKey("Completed");
-        stats.Should().ContainKey("Pending");
-        stats!["Total"].Should().Be(stats["Completed"] + stats["Pending"]);
+        stats.Should().ContainKey("total");
+        stats.Should().ContainKey("completed");
+        stats.Should().ContainKey("pending");
+        stats!["total"].Should().Be(stats["completed"] + stats["pending"]);
     }
 }
